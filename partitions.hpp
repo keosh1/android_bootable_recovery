@@ -201,6 +201,7 @@ private:
 	void Find_Real_Block_Device(string& Block_Device, bool Display_Error);    // Checks the block device given and follows symlinks until it gets to the real block device
 	unsigned long long IOCTL_Get_Block_Size();                                // Finds the partition size using ioctl
 	bool Find_Partition_Size();                                               // Finds the partition size from /proc/partitions
+	void Ensure_Subdirectory_Unmounted(const char* Mount_Point);              // Ensure that a subdirectory is unmounted before unmounting this partition
 	unsigned long long Get_Size_Via_du(string Path, bool Display_Error);      // Uses du to get sizes
 	bool Wipe_EXTFS(string File_System);                                      // Create an ext2/ext3/ext4 filesystem
 	bool Wipe_EXT4();                                                         // Formats using ext4, uses make_ext4fs when present

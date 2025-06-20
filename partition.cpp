@@ -30,6 +30,7 @@
 #include <fcntl.h>
 #include <iostream>
 #include <libgen.h>
+#include <mntent.h>
 #include <zlib.h>
 #include <sstream>
 #include <android-base/properties.h>
@@ -1728,6 +1729,43 @@ bool TWPartition::Bind_Mount(bool Display_Error) {
 	return true;
 }
 
+void TWPartition::Ensure_Subdirectory_Unmounted(const char* Mount_Point) {
+	std::unique_ptr<FILE, decltype(&endmntent)> mnts(setmntent("/proc/mounts", "r"), endmntent);
+	if (!mnts) {
+		LOGINFO("Could not read /proc/mounts\n");
+		return;
+	}
+
+	// Find sudirectory mount point
+	std::string top_directory(Mount_Point);
+	if (!android::base::EndsWith(top_directory, "/")) {
+		top_directory += "/";
+	}
+
+	std::vector<std::string> umount_points;
+	mntent* mentry;
+	while ((mentry = getmntent(mnts.get())) != nullptr) {
+		if (top_directory == mentry->mnt_dir) {
+			continue;
+		}
+
+		if (android::base::StartsWith(mentry->mnt_dir, top_directory)) {
+			LOGINFO("Found sub-directory mount '%s' under '%s'\n", mentry->mnt_dir, Mount_Point);
+			umount_points.emplace_back(mentry->mnt_dir);
+		}
+	}
+
+	// Sort by path length to umount longest path first
+	std::sort(umount_points.begin(), umount_points.end(), [](const std::string& s1, const std::string& s2) { return s1.length() > s2.length(); });
+
+	for (const auto& mount_point : umount_points) {
+		LOGINFO("Unmounting sub-directory mount '%s'\n", mount_point.c_str());
+		if (umount(mount_point.c_str()) != 0) {
+			LOGINFO("Failed to unmount '%s': '%s'\n", mount_point.c_str(), strerror(errno));
+		}
+	}
+}
+
 bool TWPartition::UnMount(bool Display_Error, int flags) {
 	if (Is_Mounted()) {
 		int never_unmount_system;
@@ -1735,6 +1773,8 @@ bool TWPartition::UnMount(bool Display_Error, int flags) {
 		DataManager::GetValue(TW_DONT_UNMOUNT_SYSTEM, never_unmount_system);
 		if (never_unmount_system == 1 && Mount_Point == PartitionManager.Get_Android_Root_Path())
 			return true; // Never unmount system if you're not supposed to unmount it
+
+		Ensure_Subdirectory_Unmounted(Mount_Point.c_str());
 
 		if (Is_Storage && MTP_Storage_ID > 0)
 			PartitionManager.Remove_MTP_Storage(MTP_Storage_ID);
