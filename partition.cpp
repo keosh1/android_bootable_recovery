@@ -2552,6 +2552,7 @@ bool TWPartition::Wipe_F2FS() {
 
 	bool NeedPreserveFooter = true;
 	bool needs_casefold = false;
+  	bool needs_projid = false;
 
 	Find_Actual_Block_Device();
 	if (!Is_Present) {
@@ -2561,6 +2562,7 @@ bool TWPartition::Wipe_F2FS() {
 	}
 
 	needs_casefold = android::base::GetBoolProperty("external_storage.casefold.enabled", false);
+	needs_projid = android::base::GetBoolProperty("external_storage.projid.enabled", false);
 	unsigned long long dev_sz = TWFunc::IOCTL_Get_Block_Size(Actual_Block_Device.c_str());
 	if (!dev_sz)
 		return false;
@@ -2569,6 +2571,8 @@ bool TWPartition::Wipe_F2FS() {
 		Length < 0 ? dev_sz += Length : dev_sz -= CRYPT_FOOTER_OFFSET;
 	char dev_sz_str[48];
 	sprintf(dev_sz_str, "%llu", (dev_sz / 4096));
+	if(needs_projid)
+		f2fs_command += " -O project_quota,extra_attr";
 
 	if(needs_casefold)
 		f2fs_command += " -O casefold -C utf8";
